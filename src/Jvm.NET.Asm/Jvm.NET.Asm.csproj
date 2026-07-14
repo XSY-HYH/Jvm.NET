@@ -11,15 +11,15 @@
 
     <!-- NuGet 包元数据 -->
     <PackageId>Jvm.NET.Asm</PackageId>
-    <Version>0.1.0-alpha</Version>
+    <Version>1.0.0</Version>
     <Authors>XSY_xiaoqi</Authors>
     <Owners>XSY_xiaoqi</Owners>
     <Company>XSY_xiaoqi</Company>
     <Product>Jvm.NET.Asm</Product>
     <Description>A C# port of the ASM bytecode manipulation framework. Parses, modifies and generates Java class files.</Description>
     <PackageTags>asm;bytecode;java;jvm;classfile;dotnet</PackageTags>
-    <PackageProjectUrl>https://github.com/XSY_xiaoqi/Jvm.NET</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/XSY_xiaoqi/Jvm.NET</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/XSY-HYH/Jvm.NET</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/XSY-HYH/Jvm.NET</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Copyright>Copyright (c) XSY_xiaoqi</Copyright>

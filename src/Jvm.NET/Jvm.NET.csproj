@@ -18,8 +18,8 @@
     <Product>Jvm.NET</Product>
     <Description>A production-grade .NET library that embeds and controls an in-process JVM: invoke jars with arguments, modify bytecode at runtime, and listen to Java method/vm events.</Description>
     <PackageTags>jvm;java;jni;jvmti;bytecode;dotnet;embedding</PackageTags>
-    <PackageProjectUrl>https://github.com/XSY_xiaoqi/Jvm.NET</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/XSY_xiaoqi/Jvm.NET</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/XSY-HYH/Jvm.NET</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/XSY-HYH/Jvm.NET</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
