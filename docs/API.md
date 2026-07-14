@@ -60,6 +60,8 @@ This document lists the public API surface of `Jvm.NET`. Types live in the `Jvm.
 | `InvokeStatic(JvmClass, string name, string sig, params JvmValue[] args) : JvmValue` | Calls a static method. |
 | `InvokeVirtual(JvmObject, string name, string sig, params JvmValue[] args) : JvmValue` | Calls an instance method. |
 | `RunMain(string jarPath, string mainClass, params string[] args) : void` | Loads the jar and invokes `public static void main(String[])`. |
+| `GetString(IntPtr javaStringHandle) : string` | Reads a Java `String` (modified UTF-8) into a .NET `string`. |
+| `NewStringArray(string[] args) : JvmValue` | Creates a Java `String[]` for passing to methods like `main`. |
 
 > Method / constructor signatures use JNI form, e.g. `(Ljava/lang/String;I)V`.
 

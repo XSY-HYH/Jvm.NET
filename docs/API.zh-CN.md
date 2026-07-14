@@ -60,6 +60,8 @@
 | `InvokeStatic(JvmClass, string name, string sig, params JvmValue[] args) : JvmValue` | 调用静态方法。 |
 | `InvokeVirtual(JvmObject, string name, string sig, params JvmValue[] args) : JvmValue` | 调用实例方法。 |
 | `RunMain(string jarPath, string mainClass, params string[] args) : void` | 加载 jar 并调用 `public static void main(String[])`。 |
+| `GetString(IntPtr javaStringHandle) : string` | 读取 Java `String`（modified UTF-8）为 .NET `string`。 |
+| `NewStringArray(string[] args) : JvmValue` | 创建 Java `String[]`，用于传递给 `main` 等方法。 |
 
 > 方法 / 构造函数签名使用 JNI 形式，例如 `(Ljava/lang/String;I)V`。
 

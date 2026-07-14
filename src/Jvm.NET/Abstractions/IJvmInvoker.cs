@@ -71,4 +71,11 @@ public interface IJvmInvoker
     /// Accepts any <c>jstring</c> handle, whether local or global ref.
     /// </summary>
     string GetString(IntPtr javaStringHandle);
+
+    /// <summary>
+    /// Creates a Java <c>String[]</c> from .NET strings. The returned <see cref="JvmValue"/>
+    /// holds a JNI local reference; pass it directly as an argument to
+    /// <see cref="InvokeStatic"/> / <see cref="InvokeVirtual"/> (e.g. for calling <c>main</c>).
+    /// </summary>
+    JvmValue NewStringArray(string[] args);
 }

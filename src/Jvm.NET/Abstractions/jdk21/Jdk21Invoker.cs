@@ -218,6 +218,20 @@ internal sealed unsafe class Jdk21Invoker : IJvmInvoker, IDisposable
         return _env.GetStringUTFChars(javaStringHandle);
     }
 
+    public JvmValue NewStringArray(string[] args)
+    {
+        if (args is null) throw new ArgumentNullException(nameof(args));
+        EnsureClassCache();
+        var javaArgs = _env.NewObjectArray(args.Length, _stringClass, IntPtr.Zero);
+        for (int i = 0; i < args.Length; i++)
+        {
+            var s = _env.NewStringUTF(args[i]);
+            _env.SetObjectArrayElement(javaArgs, i, s);
+            _env.DeleteLocalRef(s);
+        }
+        return JvmValue.FromObject(javaArgs);
+    }
+
     public void Dispose()
     {
         if (_activeClassLoader != IntPtr.Zero)

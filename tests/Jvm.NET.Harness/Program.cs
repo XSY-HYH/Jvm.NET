@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Text;
 using Jvm.NET;
 using Jvm.NET.Abstractions;
@@ -185,7 +186,113 @@ using (runtime.BytecodeModifier.RegisterTransformer(asmTransformer))
 Console.WriteLine($"    ASM transformer hit count: {asmTransformer.HitCount}");
 Console.WriteLine();
 
+// 9) RedefineClasses 热替换：运行时直接替换已加载类的字节码
+// 与 ClassFileLoadHook（加载时）不同，RedefineClasses 可以对已经加载的类热替换方法体。
+// 这里把 Target.compute 的方法体从 `a*b+42` 改成 `return 999`。
+Console.WriteLine("=== Test 9: RedefineClasses (hot-swap Target.compute) ===");
+invoker.LoadJar(jarPath);
+var targetForRedefine = invoker.LoadClass("Target");
+var beforeResult = invoker.InvokeStatic(targetForRedefine, "compute", "(II)I",
+    JvmValue.FromInt(6), JvmValue.FromInt(7));
+Console.WriteLine($"    Before redefine: compute(6, 7) = {beforeResult.AsInt()} (expected 84)");
+
+var targetOriginalBytes = ExtractClassFromJar(jarPath, "Target.class");
+var redefinedBytes = OverrideMethodBody(targetOriginalBytes, "compute", "(II)I", mv =>
+{
+    mv.VisitIntInsn(Opcodes.SIPUSH, 999);   // sipush 999
+    mv.VisitInsn(Opcodes.IRETURN);           // ireturn
+}, maxStack: 1, maxLocals: 2);
+
+runtime.BytecodeModifier.RedefineClasses(
+    new[] { new KeyValuePair<JvmClass, byte[]>(targetForRedefine, redefinedBytes) });
+
+var afterResult = invoker.InvokeStatic(targetForRedefine, "compute", "(II)I",
+    JvmValue.FromInt(6), JvmValue.FromInt(7));
+Console.WriteLine($"    After redefine:  compute(6, 7) = {afterResult.AsInt()} (expected 999)");
+Console.WriteLine();
+
+// 10) RetransformClasses：对已加载的类重新触发 ClassFileLoadHook
+// 先加载类（无 transformer），再注册 transformer，再调用 RetransformClasses 让 transformer 重新处理。
+Console.WriteLine("=== Test 10: RetransformClasses (re-trigger hook on loaded class) ===");
+invoker.LoadJar(jarPath);
+var targetForRetransform = invoker.LoadClass("Target");
+Console.WriteLine($"    Target loaded (no transformer at load time).");
+
+var recordingTransformer = new RecordingTransformer("Target");
+using (runtime.BytecodeModifier.RegisterTransformer(recordingTransformer))
+{
+    Console.WriteLine($"    Before retransform: hit count = {recordingTransformer.HitCount}");
+    runtime.BytecodeModifier.RetransformClasses(new[] { targetForRetransform });
+    Console.WriteLine($"    After retransform:  hit count = {recordingTransformer.HitCount} (expected >= 1)");
+}
+Console.WriteLine();
+
+// 11) 多 transformer 叠加：两个 transformer 同时注册，验证协作不冲突
+// transformerA（ASM 不等长）替换 "Hello from Java!" -> "HACKED by A"
+// transformerB（等长）替换 "Args count" -> "Hax count!"（都是 10 字符）
+Console.WriteLine("=== Test 11: Multiple transformers stacked ===");
+Console.WriteLine("    transformerA: \"Hello from Java!\" -> \"HACKED by A\" (ASM, unequal length)");
+Console.WriteLine("    transformerB: \"Args count\"      -> \"Hax count!\"  (equal length)");
+var transformerA = new AsmStringReplaceTransformer("Hello from Java!", "HACKED by A");
+var transformerB = new StringReplaceTransformer("Args count", "Hax count!");
+using (runtime.BytecodeModifier.RegisterTransformer(transformerA))
+using (runtime.BytecodeModifier.RegisterTransformer(transformerB))
+{
+    invoker.RunMain(jarPath, "HelloWorld", "multi-transform");
+}
+Console.WriteLine($"    transformerA hit count: {transformerA.HitCount} (expected >= 1)");
+Console.WriteLine($"    transformerB hit count: {transformerB.HitCount} (expected >= 1)");
+Console.WriteLine();
+
+// 12) 覆盖 main 方法体：用 RedefineClasses 把 HelloWorld.main 改成打印固定字符串
+// 注意：不能用 RunMain（会创建新 ClassLoader 导致 redefine 无效），
+// 改用 LoadJar + LoadClass + RedefineClasses + InvokeStatic main。
+Console.WriteLine("=== Test 12: RedefineClasses (override main method body) ===");
+invoker.LoadJar(jarPath);
+var helloForOverride = invoker.LoadClass("HelloWorld");
+
+var helloOriginalBytes = ExtractClassFromJar(jarPath, "HelloWorld.class");
+var overriddenHelloBytes = OverrideMethodBody(helloOriginalBytes, "main", "([Ljava/lang/String;)V", mv =>
+{
+    // 等价 Java: System.out.println("PWNED MAIN");
+    mv.VisitFieldInsn(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
+    mv.VisitLdcInsn("PWNED MAIN");
+    mv.VisitMethodInsn(Opcodes.INVOKEVIRTUAL, "java/io/PrintStream", "println", "(Ljava/lang/String;)V");
+    mv.VisitInsn(Opcodes.RETURN);
+}, maxStack: 2, maxLocals: 1);
+
+runtime.BytecodeModifier.RedefineClasses(
+    new[] { new KeyValuePair<JvmClass, byte[]>(helloForOverride, overriddenHelloBytes) });
+
+Console.WriteLine("    Calling main after override (expect 'PWNED MAIN')...");
+var mainArgs = invoker.NewStringArray(Array.Empty<string>());
+invoker.InvokeStatic(helloForOverride, "main", "([Ljava/lang/String;)V", mainArgs);
+Console.WriteLine();
+
 Console.WriteLine("[Harness] All tests completed.");
+
+// ---- 本地函数 ----
+static byte[] ExtractClassFromJar(string jarPath, string entryName)
+{
+    using var archive = ZipFile.OpenRead(jarPath);
+    var entry = archive.GetEntry(entryName)
+        ?? throw new FileNotFoundException($"Entry '{entryName}' not in jar '{jarPath}'.");
+    using var stream = entry.Open();
+    using var ms = new MemoryStream();
+    stream.CopyTo(ms);
+    return ms.ToArray();
+}
+
+static byte[] OverrideMethodBody(byte[] originalBytes, string methodName, string methodDesc,
+    Action<MethodVisitor> emitBody, int maxStack, int maxLocals)
+{
+    var reader = new ClassReader(originalBytes);
+    var writer = new ClassWriter(ClassWriter.COMPUTE_MAXS);
+    var visitor = new BodyOverrideClassVisitor(Opcodes.ASM9, writer,
+        methodName, methodDesc, emitBody, maxStack, maxLocals);
+    reader.Accept(visitor, 0);
+    return writer.ToByteArray();
+}
 
 // ---- 等长字符串替换 transformer ----
 // 在 class 字节码中扫描 pattern 字节序列，替换为等长的 replacement。
@@ -342,5 +449,63 @@ sealed class AsmStringReplaceTransformer : IBytecodeTransformer
             }
             base.VisitInvokeDynamicInsn(name, descriptor, bootstrapMethodHandle, bootstrapMethodArguments);
         }
+    }
+}
+
+sealed class BodyOverrideClassVisitor : ClassVisitor
+{
+    private readonly string _methodName;
+    private readonly string _methodDesc;
+    private readonly Action<MethodVisitor> _emitBody;
+    private readonly int _maxStack;
+    private readonly int _maxLocals;
+
+    public BodyOverrideClassVisitor(int api, ClassVisitor cv, string methodName, string methodDesc,
+        Action<MethodVisitor> emitBody, int maxStack, int maxLocals)
+        : base(api, cv)
+    {
+        _methodName = methodName;
+        _methodDesc = methodDesc;
+        _emitBody = emitBody;
+        _maxStack = maxStack;
+        _maxLocals = maxLocals;
+    }
+
+    public override MethodVisitor? VisitMethod(int access, string? name, string? descriptor,
+        string? signature, string[]? exceptions)
+    {
+        if (name == _methodName && descriptor == _methodDesc)
+        {
+            // 直接生成新方法体，返回 null 让 ClassReader 跳过原始方法体解析
+            var mv = Cv!.VisitMethod(access, name, descriptor, signature, exceptions);
+            if (mv != null)
+            {
+                mv.VisitCode();
+                _emitBody(mv);
+                mv.VisitMaxs(_maxStack, _maxLocals);
+                mv.VisitEnd();
+            }
+            return null;
+        }
+        return base.VisitMethod(access, name, descriptor, signature, exceptions);
+    }
+}
+
+// ---- 记录型 transformer（用于 RetransformClasses 测试）----
+// 不修改字节码（返回 null），只记录 Transform 被调用的次数。
+sealed class RecordingTransformer : IBytecodeTransformer
+{
+    private readonly string _targetClass;
+    private int _hitCount;
+
+    public RecordingTransformer(string targetClass) => _targetClass = targetClass;
+    public string Name => "Recording";
+    public int HitCount => _hitCount;
+
+    public byte[]? Transform(string className, byte[] originalBytes)
+    {
+        if (className == _targetClass)
+            Interlocked.Increment(ref _hitCount);
+        return null;
     }
 }

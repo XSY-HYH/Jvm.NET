@@ -1835,15 +1835,15 @@ internal sealed class MethodWriter : MethodVisitor
     /// method_info JVMS structure in 'source.b', between 'methodInfoOffset' and 'methodInfoOffset'
     /// + 'methodInfoLength'.</returns>
     internal bool CanCopyMethodAttributes(
-        object? source, // TODO: ClassReader
+        object? source,
         bool hasSyntheticAttribute,
         bool hasDeprecatedAttribute,
         int descriptorIndex,
         int signatureIndex,
         int exceptionsOffset)
     {
-        // TODO: ClassReader not ported yet.
-        throw new NotImplementedException("ClassReader not ported yet.");
+        // 属性复制优化未移植：返回 false 强制 ClassReader 走重新解析路径。
+        return false;
     }
 
     /// <summary>
