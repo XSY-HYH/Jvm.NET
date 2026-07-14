@@ -1,0 +1,56 @@
+# ====================
+# .NET 构建产物
+# ====================
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+artifacts/
+*.user
+*.suo
+*.userprefs
+*.csproj.user
+*.sln.docstates
+
+# ====================
+# NuGet
+# ====================
+*.nupkg
+*.snupkg
+**/[Pp]ackages/*
+!**/*.build.props
+!**/*.build.targets
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# ====================
+# IDE / 编辑器
+# ====================
+.vs/
+.vscode/
+.idea/
+.trae/
+*.swp
+*~
+
+# ====================
+# OpenJDK 源码参考目录（仅供开发时查阅，不进入仓库）
+# ====================
+refs/
+
+# ====================
+# 项目内部上下文文件（按项目规则不提交）
+# ====================
+OFAP.md
+error.log
+*.log
+
+# ====================
+# Java 编译产物
+# ====================
+tests/Jvm.NET.Harness/Java/build/
+
+# ====================
+# 构建脚本本地缓存
+# ====================
+.tmp/

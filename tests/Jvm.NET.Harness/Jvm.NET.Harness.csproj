@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>Jvm.NET.Harness</RootNamespace>
+    <AssemblyName>Jvm.NET.Harness</AssemblyName>
+    <!-- 与 Jvm.NET 主项目保持一致的平台列表，构建时需指定 -p:Platform=x64 -->
+    <Platforms>x64;arm64</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Jvm.NET\Jvm.NET.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Java\HelloWorld.jar">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

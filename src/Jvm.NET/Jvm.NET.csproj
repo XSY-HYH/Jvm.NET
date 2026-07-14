@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>Jvm.NET</RootNamespace>
+    <AssemblyName>Jvm.NET</AssemblyName>
+
+    <!-- NuGet 包元数据 -->
+    <PackageId>Jvm.NET</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>XSY_xiaoqi</Authors>
+    <Owners>XSY_xiaoqi</Owners>
+    <Company>XSY_xiaoqi</Company>
+    <Product>Jvm.NET</Product>
+    <Description>A production-grade .NET library that embeds and controls an in-process JVM: invoke jars with arguments, modify bytecode at runtime, and listen to Java method/vm events.</Description>
+    <PackageTags>jvm;java;jni;jvmti;bytecode;dotnet;embedding</PackageTags>
+    <PackageProjectUrl>https://github.com/XSY_xiaoqi/Jvm.NET</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/XSY_xiaoqi/Jvm.NET</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Copyright>Copyright (c) XSY_xiaoqi</Copyright>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+    <!-- 跨平台构建属性 -->
+    <Platforms>x64;arm64</Platforms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Jvm.NET.Asm\Jvm.NET.Asm.csproj" />
+  </ItemGroup>
+
+</Project>
