@@ -29,7 +29,7 @@ using Jvm.NET.Abstractions;
 var runtime = JvmInitializer.Initialize(new JvmInitializationOptions
 {
     JdkBinPath = @"C:\jdk-21\bin",     // 或 /usr/lib/jvm/jdk-21/bin
-    Version    = JdkVersion.Jdk21,
+    Version    = 21,
     Classpath  = ["/opt/myapp/app.jar"],
 });
 

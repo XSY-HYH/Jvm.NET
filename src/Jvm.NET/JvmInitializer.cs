@@ -1,6 +1,4 @@
 using Jvm.NET.Abstractions;
-using Jvm.NET.Abstractions.Jdk21;
-using Jvm.NET.Interop;
 
 namespace Jvm.NET;
 
@@ -39,12 +37,11 @@ public static class JvmInitializer
                 return _current;
             }
 
-            var loader = NativeLibraryLoader.Instance;
-            IJvmRuntime runtime = options.Version switch
-            {
-                JdkVersion.Jdk21 => new Jdk21Runtime(options, loader),
-                _ => throw new NotSupportedException($"JDK version '{options.Version}' is not supported yet."),
-            };
+            var impl = JdkImplementationRegistry.Resolve(options.Version)
+                ?? throw new NotSupportedException(
+                    $"No implementation registered for JDK version '{options.Version}'. " +
+                    $"Register one via JdkImplementationRegistry.Register(...) before calling Initialize.");
+            IJvmRuntime runtime = impl.CreateRuntime(options);
 
             runtime.Start();
             _current = runtime;
@@ -70,7 +67,7 @@ public static class JvmInitializer
         if (string.IsNullOrWhiteSpace(options.JdkBinPath))
             throw new ArgumentException("JvmInitializationOptions.JdkBinPath must be set.", nameof(options));
 
-        if (!Enum.IsDefined(options.Version))
-            throw new ArgumentOutOfRangeException(nameof(options), options.Version, "Unsupported JDK version.");
+        if (options.Version <= 0)
+            throw new ArgumentOutOfRangeException(nameof(options), options.Version, "JDK major version must be a positive integer.");
     }
 }

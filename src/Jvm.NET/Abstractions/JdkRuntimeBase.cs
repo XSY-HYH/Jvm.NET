@@ -1,24 +1,39 @@
 using System.Runtime.InteropServices;
+using Jvm.NET.Abstractions.Jdk21;
 using Jvm.NET.Interop;
 using Jvm.NET.Interop.Jni;
 using Jvm.NET.Interop.Jvmti;
 
-namespace Jvm.NET.Abstractions.Jdk21;
+namespace Jvm.NET.Abstractions;
 
 /// <summary>
-/// JDK 21 specific implementation of <see cref="IJvmRuntime"/>.
-///
-/// Boot sequence:
-///   1. Load <c>jvm.dll</c> / <c>libjvm.so</c> / <c>libjvm.dylib</c> from <see cref="JvmInitializationOptions.JdkBinPath"/>.
-///   2. Resolve <c>JNI_CreateJavaVM</c> and call it with a synthesised <see cref="JavaVMInitArgs"/>.
-///   3. Obtain a <c>jvmtiEnv*</c> via <c>JavaVM-&gt;GetEnv(JVMTI_VERSION_21)</c>.
-///   4. Add the capabilities required by bytecode modification / event listening.
-///   5. Construct <see cref="Jdk21Invoker"/> / <see cref="Jdk21BytecodeModifier"/> / <see cref="Jdk21EventListener"/>.
+/// Generic <see cref="IJvmRuntime"/> implementation shared across JDK 21+ versions.
 /// </summary>
-internal sealed unsafe class Jdk21Runtime : IJvmRuntime
+/// <remarks>
+/// <para>
+/// JDK 21-25 share an identical JNI/JVMTI ABI; the only per-version difference is the
+/// version constant passed to <c>JNI_CreateJavaVM</c> and <c>GetEnv</c>. This base class
+/// parameterises those constants so that a single <see cref="IJdkImplementation"/> per
+/// version is sufficient.
+/// </para>
+/// <para>
+/// Boot sequence:
+/// <list type="number">
+/// <item>Load <c>jvm.dll</c> / <c>libjvm.so</c> / <c>libjvm.dylib</c> from <see cref="JvmInitializationOptions.JdkBinPath"/>.</item>
+/// <item>Resolve <c>JNI_CreateJavaVM</c> and call it with a synthesised <see cref="JavaVMInitArgs"/>.</item>
+/// <item>Obtain a <c>jvmtiEnv*</c> via <c>JavaVM-&gt;GetEnv(jvmtiVersion)</c>.</item>
+/// <item>Add the capabilities required by bytecode modification / event listening.</item>
+/// <item>Construct the invoker / bytecode modifier / event listener.</item>
+/// </list>
+/// </para>
+/// </remarks>
+public unsafe class JdkRuntimeBase : IJvmRuntime
 {
     private readonly JvmInitializationOptions _options;
     private readonly INativeLibraryLoader _loader;
+    private readonly int _version;
+    private readonly int _jniVersion;
+    private readonly int _jvmtiVersion;
 
     private JvmRuntimeState _state = JvmRuntimeState.NotStarted;
 
@@ -35,14 +50,32 @@ internal sealed unsafe class Jdk21Runtime : IJvmRuntime
     private JnBridge? _jnBridge;
     private MethodEventInstrumentor? _instrumentor;
 
-    public Jdk21Runtime(JvmInitializationOptions options, INativeLibraryLoader loader)
+    /// <summary>
+    /// Creates a runtime for the given JDK version.
+    /// </summary>
+    /// <param name="options">Initialization options.</param>
+    /// <param name="version">The JDK major version (e.g. 21, 22, 8).</param>
+    /// <param name="jniVersion">JNI version constant (e.g. 0x00150000 for JDK 21).</param>
+    /// <param name="jvmtiVersion">JVMTI version constant (e.g. 0x30150000 for JDK 21).</param>
+    public JdkRuntimeBase(JvmInitializationOptions options, int version, int jniVersion, int jvmtiVersion)
     {
         _options = options ?? throw new ArgumentNullException(nameof(options));
-        _loader = loader ?? throw new ArgumentNullException(nameof(loader));
+        _loader = NativeLibraryLoader.Instance;
+        _version = version;
+        _jniVersion = jniVersion;
+        _jvmtiVersion = jvmtiVersion;
+    }
+
+    /// <summary>
+    /// Creates a runtime from a registered <see cref="IJdkImplementation"/>.
+    /// </summary>
+    public JdkRuntimeBase(JvmInitializationOptions options, IJdkImplementation implementation)
+        : this(options, implementation.Version, implementation.JniVersion, implementation.JvmtiVersion)
+    {
     }
 
     public JvmRuntimeState State => _state;
-    public JdkVersion Version => JdkVersion.Jdk21;
+    public int Version => _version;
 
     public IJvmInvoker Invoker
     {
@@ -204,7 +237,7 @@ internal sealed unsafe class Jdk21Runtime : IJvmRuntime
 
             var args = new JavaVMInitArgs
             {
-                Version = NativeConstants.RequiredJniVersion,
+                Version = _jniVersion,
                 nOptions = optionStrings.Count,
                 Options = optionPtrs,
                 IgnoreUnrecognized = JniTypes.JNI_TRUE,
@@ -249,13 +282,13 @@ internal sealed unsafe class Jdk21Runtime : IJvmRuntime
         // require JVMTI, we treat it as a soft failure.
         ref var invoke = ref JNIInvokeInterface.FromJavaVm(_javaVm);
         IntPtr jvmtiEnvPtr = IntPtr.Zero;
-        int rc = invoke.GetEnv(_javaVm, &jvmtiEnvPtr, NativeConstants.JVMTI_VERSION_21);
+        int rc = invoke.GetEnv(_javaVm, &jvmtiEnvPtr, _jvmtiVersion);
         _jvmtiEnv = jvmtiEnvPtr;
 
         if (rc != NativeConstants.JNI_OK)
         {
             if (_options.RequireJvmti || _options.EnableBytecodeModification || _options.EnableEventListening)
-                throw new InvalidOperationException($"JavaVM->GetEnv(JVMTI_VERSION_21) returned {rc}; JVMTI is required by the current options.");
+                throw new InvalidOperationException($"JavaVM->GetEnv(0x{_jvmtiVersion:X8}) returned {rc}; JVMTI is required by the current options.");
             _jvmtiEnv = IntPtr.Zero;
         }
     }

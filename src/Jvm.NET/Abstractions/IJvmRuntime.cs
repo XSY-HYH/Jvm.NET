@@ -10,8 +10,8 @@ public interface IJvmRuntime : IDisposable
     /// <summary>Current lifecycle state of the runtime.</summary>
     JvmRuntimeState State { get; }
 
-    /// <summary>The JDK version this runtime was initialised against.</summary>
-    JdkVersion Version { get; }
+    /// <summary>The JDK major version this runtime was initialised against (e.g. 21, 22, 8).</summary>
+    int Version { get; }
 
     /// <summary>Accessor for invocation APIs. Throws if the runtime is not running.</summary>
     IJvmInvoker Invoker { get; }

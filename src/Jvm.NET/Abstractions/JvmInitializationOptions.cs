@@ -13,10 +13,10 @@ public sealed class JvmInitializationOptions
     public required string JdkBinPath { get; set; }
 
     /// <summary>
-    /// Target JDK version. Used to select the matching abstraction layer under
-    /// <c>Abstractions/jdkXX</c>.
+    /// Target JDK major version (e.g. 21, 22, 8). Used to select the matching
+    /// <see cref="IJdkImplementation"/> registered in <see cref="JdkImplementationRegistry"/>.
     /// </summary>
-    public required JdkVersion Version { get; set; }
+    public required int Version { get; set; }
 
     /// <summary>
     /// Extra <c>-X</c> / <c>-D</c> JVM arguments forwarded to <c>JNI_CreateJavaVM</c>.

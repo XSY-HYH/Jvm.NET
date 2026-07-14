@@ -19,7 +19,7 @@ Console.WriteLine();
 var options = new JvmInitializationOptions
 {
     JdkBinPath                 = JdkBinPath,
-    Version                    = JdkVersion.Jdk21,
+    Version                    = 21,
     EnableBytecodeModification = true,
     EnableEventListening       = true,   // 本次需要测试事件监听
 };

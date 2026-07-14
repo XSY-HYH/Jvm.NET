@@ -5,6 +5,7 @@
 ## 目录
 
 - [初始化](#初始化)
+- [JDK 版本抽象](#jdk-版本抽象)
 - [运行时门面](#运行时门面)
 - [方法调用](#方法调用)
 - [字节码修改](#字节码修改)
@@ -25,12 +26,61 @@
 | 属性 | 类型 | 说明 |
 | --- | --- | --- |
 | `JdkBinPath` | `string` | **必填**。JDK `bin` 目录的绝对路径。 |
-| `Version` | `JdkVersion` | **必填**。当前仅支持 `Jdk21`。 |
+| `Version` | `int` | **必填**。JDK 主版本号（如 `21`、`22`、`8`）。核心包内置 21-25 的实现；其它版本可通过 `JdkImplementationRegistry` 注册——详见 [EXTENDING.zh-CN.md](EXTENDING.zh-CN.md)。 |
 | `VmArguments` | `IReadOnlyList<string>` | 透传给 `JNI_CreateJavaVM` 的额外 `-X` / `-D` 参数。 |
 | `Classpath` | `IReadOnlyList<string>` | 启动时追加到 `java.class.path` 的条目。 |
 | `EnableBytecodeModification` | `bool` | 是否加载 JVMTI 代理以支持 `ClassFileLoadHook`。默认 `true`。 |
 | `EnableEventListening` | `bool` | 是否启用 JVMTI 事件回调。默认 `true`。 |
 | `RequireJvmti` | `bool` | 获取不到 JVMTI 时是否抛出异常。 |
+
+## JDK 版本抽象
+
+`Jvm.NET` 内置 JDK 21-25 的默认实现，并提供可插拔的注册表，允许第三方包提供自己的实现
+（例如在 `Jvm.NET` 发布新版本前支持新 JDK 发行版，或支持厂商定制 JVM）。
+
+### `Version`（int）
+
+JDK 主版本号，普通 `int` 类型。核心包内置支持 JDK 21、22、23、24、25。任意正整数
+都可作为版本号使用，只要在 `Initialize` 之前通过 `JdkImplementationRegistry` 注册
+了匹配的 `IJdkImplementation`——教程见 [EXTENDING.zh-CN.md](EXTENDING.zh-CN.md)
+（含 JDK 8 完整示例）。
+
+### `IJdkImplementation`
+
+每个 JDK 版本适配器都需实现此契约。核心包内部实现在 `Jvm.NET.Abstractions.Jdk21`..`Jdk25`
+命名空间下；第三方包应暴露自己的 `IJdkImplementation`。
+
+| 成员 | 说明 |
+| --- | --- |
+| `Version : int` | 该实现所针对的 JDK 主版本号（如 21、8）。 |
+| `JniVersion : int` | 传给 `JNI_CreateJavaVM` / `GetEnv` 的 JNI 版本常量（如 JDK 21 为 `0x00150000`）。 |
+| `JvmtiVersion : int` | 传给 `JavaVM->GetEnv` 的 JVMTI 版本常量（如 JDK 21 为 `0x30150000`）。 |
+| `CreateRuntime(JvmInitializationOptions) : IJvmRuntime` | 构造该版本的运行时。 |
+
+### `JdkImplementationRegistry`（静态）
+
+`JvmInitializer.Initialize` 会查询的全局注册表。核心包在程序集加载时通过
+`ModuleInitializer` 自动注册 JDK 21-25；第三方包可以在 `Initialize` 之前调用
+`Register` 来覆盖任意版本。
+
+| 成员 | 说明 |
+| --- | --- |
+| `Register(IJdkImplementation) : void` | 注册（或替换）`implementation.Version` 对应的实现。 |
+| `Resolve(int version) : IJdkImplementation?` | 返回已注册的实现，未注册则返回 `null`。 |
+
+### `JdkRuntimeBase`
+
+内置 JDK 21-25 实现所使用的公共基类。JDK 21-25 的 JNI/JVMTI ABI 完全一致，唯一的
+版本差异是传给 `JNI_CreateJavaVM` 和 `GetEnv` 的版本常量，因此一个参数化的
+`JdkRuntimeBase` 就够用。第三方 `IJdkImplementation` 作者可继承它，也可直接实现
+`IJvmRuntime`。
+
+| 构造函数 | 说明 |
+| --- | --- |
+| `JdkRuntimeBase(JvmInitializationOptions, int version, int jniVersion, int jvmtiVersion)` | 通过显式版本常量创建运行时。 |
+| `JdkRuntimeBase(JvmInitializationOptions, IJdkImplementation)` | 从已注册的实现创建运行时。 |
+
+> 构造后实例即表现为 `IJvmRuntime`（见下文）。
 
 ## 运行时门面
 
@@ -39,7 +89,7 @@
 | 成员 | 说明 |
 | --- | --- |
 | `State : JvmRuntimeState` | `NotStarted` / `Starting` / `Running` / `ShuttingDown` / `Stopped` / `Faulted`。 |
-| `Version : JdkVersion` | 该运行时对应的 JDK 版本。 |
+| `Version : int` | 该运行时对应的 JDK 主版本号（如 21、8）。 |
 | `Invoker : IJvmInvoker` | 方法调用入口；未运行时抛出异常。 |
 | `BytecodeModifier : IBytecodeModifier` | 字节码修改入口；启动时未开启则抛出异常。 |
 | `EventListener : IJvmEventListener` | 事件监听入口；启动时未开启则抛出异常。 |

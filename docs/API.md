@@ -5,6 +5,7 @@ This document lists the public API surface of `Jvm.NET`. Types live in the `Jvm.
 ## Table of contents
 
 - [Initialization](#initialization)
+- [JDK version abstraction](#jdk-version-abstraction)
 - [Runtime facade](#runtime-facade)
 - [Invoker](#invoker)
 - [Bytecode modifier](#bytecode-modifier)
@@ -25,12 +26,67 @@ This document lists the public API surface of `Jvm.NET`. Types live in the `Jvm.
 | Property | Type | Notes |
 | --- | --- | --- |
 | `JdkBinPath` | `string` | **Required.** Absolute path to the JDK `bin` directory. |
-| `Version` | `JdkVersion` | **Required.** Currently only `Jdk21`. |
+| `Version` | `int` | **Required.** JDK major version (e.g. `21`, `22`, `8`). The core package ships built-in implementations for 21-25; other versions can be added via `JdkImplementationRegistry` — see [EXTENDING.md](EXTENDING.md). |
 | `VmArguments` | `IReadOnlyList<string>` | Extra `-X` / `-D` arguments forwarded to `JNI_CreateJavaVM`. |
 | `Classpath` | `IReadOnlyList<string>` | Entries appended to `java.class.path` at startup. |
 | `EnableBytecodeModification` | `bool` | Loads the JVMTI agent for `ClassFileLoadHook`. Default `true`. |
 | `EnableEventListening` | `bool` | Enables JVMTI event callbacks. Default `true`. |
 | `RequireJvmti` | `bool` | Throws if JVMTI cannot be obtained. |
+
+## JDK version abstraction
+
+`Jvm.NET` ships default implementations for JDK 21-25 and exposes a pluggable
+registry so that third-party packages can provide their own implementations
+(e.g. for a new JDK release before `Jvm.NET` ships an update, or for a
+vendor-specific JVM).
+
+### `Version` (int)
+
+JDK major version as a plain `int`. The core package ships built-in
+implementations for JDK 21, 22, 23, 24, 25. Any other positive integer can
+be used as long as a matching `IJdkImplementation` is registered via
+`JdkImplementationRegistry` before `Initialize` — see
+[EXTENDING.md](EXTENDING.md) for a tutorial (including a JDK 8 example).
+
+### `IJdkImplementation`
+
+Contract implemented by every JDK version adapter. The core package provides
+internal implementations under `Jvm.NET.Abstractions.Jdk21`..`Jdk25`
+namespaces; third-party packages should expose their own `IJdkImplementation`.
+
+| Member | Description |
+| --- | --- |
+| `Version : int` | The JDK major version this implementation targets (e.g. 21, 8). |
+| `JniVersion : int` | JNI version constant passed to `JNI_CreateJavaVM` / `GetEnv` (e.g. `0x00150000` for JDK 21). |
+| `JvmtiVersion : int` | JVMTI version constant passed to `JavaVM->GetEnv` (e.g. `0x30150000` for JDK 21). |
+| `CreateRuntime(JvmInitializationOptions) : IJvmRuntime` | Constructs a runtime for this version. |
+
+### `JdkImplementationRegistry` (static)
+
+Global registry consulted by `JvmInitializer.Initialize`. The core package
+auto-registers JDK 21-25 via a `ModuleInitializer` when the assembly loads;
+third-party packages can override any version by calling `Register` before
+`Initialize`.
+
+| Member | Description |
+| --- | --- |
+| `Register(IJdkImplementation) : void` | Registers (or replaces) the implementation for `implementation.Version`. |
+| `Resolve(int version) : IJdkImplementation?` | Returns the registered implementation, or `null`. |
+
+### `JdkRuntimeBase`
+
+Public base class used by the built-in JDK 21-25 implementations. JDK 21-25
+share an identical JNI/JVMTI ABI; the only per-version difference is the
+version constant passed to `JNI_CreateJavaVM` and `GetEnv`, which is why a
+single parameterised `JdkRuntimeBase` suffices. Third-party `IJdkImplementation`
+authors may derive from it or implement `IJvmRuntime` directly.
+
+| Constructor | Description |
+| --- | --- |
+| `JdkRuntimeBase(JvmInitializationOptions, int version, int jniVersion, int jvmtiVersion)` | Creates a runtime with explicit version constants. |
+| `JdkRuntimeBase(JvmInitializationOptions, IJdkImplementation)` | Creates a runtime from a registered implementation. |
+
+> The instance then behaves as an `IJvmRuntime` (see below).
 
 ## Runtime facade
 
@@ -39,7 +95,7 @@ This document lists the public API surface of `Jvm.NET`. Types live in the `Jvm.
 | Member | Description |
 | --- | --- |
 | `State : JvmRuntimeState` | `NotStarted` / `Starting` / `Running` / `ShuttingDown` / `Stopped` / `Faulted`. |
-| `Version : JdkVersion` | The JDK version this runtime was initialised against. |
+| `Version : int` | The JDK major version this runtime was initialised against (e.g. 21, 8). |
 | `Invoker : IJvmInvoker` | Accessor for invocation APIs. Throws if not running. |
 | `BytecodeModifier : IBytecodeModifier` | Accessor for bytecode APIs. Throws if disabled at startup. |
 | `EventListener : IJvmEventListener` | Accessor for event APIs. Throws if disabled at startup. |
