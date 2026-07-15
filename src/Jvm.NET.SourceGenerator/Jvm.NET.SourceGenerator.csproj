@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Jvm.NET.SourceGenerator</RootNamespace>
+    <AssemblyName>Jvm.NET.SourceGenerator</AssemblyName>
+    <IsRoslynComponent>true</IsRoslynComponent>
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+    <PackageId>Jvm.NET.SourceGenerator</PackageId>
+    <Version>2.1.0</Version>
+    <Authors>XSY_xiaoqi</Authors>
+    <Owners>XSY_xiaoqi</Owners>
+    <Company>XSY_xiaoqi</Company>
+    <Product>Jvm.NET</Product>
+    <Description>Source Generator for Jvm.NET: generates strongly-typed C# wrappers for Java classes.</Description>
+    <PackageTags>jvm;java;jni;source-generator;dotnet</PackageTags>
+    <PackageProjectUrl>https://github.com/XSY-HYH/Jvm.NET</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/XSY-HYH/Jvm.NET</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+    <Copyright>Copyright (c) XSY_xiaoqi</Copyright>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" PrivateAssets="all" />
+    <PackageReference Include="System.Text.Json" Version="8.0.0" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

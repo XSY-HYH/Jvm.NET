@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Jvm.NET/Jvm.NET.csproj" />
     <Project Path="src/Jvm.NET.Asm/Jvm.NET.Asm.csproj" />
+    <Project Path="src/Jvm.NET.SourceGenerator/Jvm.NET.SourceGenerator.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Jvm.NET.Harness/Jvm.NET.Harness.csproj" />

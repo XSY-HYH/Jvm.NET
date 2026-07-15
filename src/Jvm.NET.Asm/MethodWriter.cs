@@ -609,22 +609,21 @@ internal sealed class MethodWriter : MethodVisitor
 
     public override AnnotationVisitor? VisitAnnotationDefault()
     {
-        defaultValue = new ByteVector();
-        // TODO: Replace with AnnotationWriter when ported
-        throw new NotImplementedException("AnnotationWriter not ported yet.");
+        // TODO: port AnnotationWriter — annotations are dropped for now
+        return null;
     }
 
     public override AnnotationVisitor? VisitAnnotation(string? descriptor, bool visible)
     {
         // TODO: Replace with AnnotationWriter when ported
-        throw new NotImplementedException("AnnotationWriter not ported yet.");
+        return null; // TODO: port AnnotationWriter — annotations are dropped for now
     }
 
     public override AnnotationVisitor? VisitTypeAnnotation(
         int typeRef, TypePath? typePath, string? descriptor, bool visible)
     {
         // TODO: Replace with AnnotationWriter when ported
-        throw new NotImplementedException("AnnotationWriter not ported yet.");
+        return null; // TODO: port AnnotationWriter — annotations are dropped for now
     }
 
     public override void VisitAnnotableParameterCount(int parameterCount, bool visible)
@@ -643,7 +642,7 @@ internal sealed class MethodWriter : MethodVisitor
         int parameter, string? annotationDescriptor, bool visible)
     {
         // TODO: Replace with AnnotationWriter when ported
-        throw new NotImplementedException("AnnotationWriter not ported yet.");
+        return null; // TODO: port AnnotationWriter — annotations are dropped for now
     }
 
     public override void VisitAttribute(Attribute? attribute)
@@ -1444,7 +1443,7 @@ internal sealed class MethodWriter : MethodVisitor
         int typeRef, TypePath? typePath, string? descriptor, bool visible)
     {
         // TODO: Replace with AnnotationWriter when ported
-        throw new NotImplementedException("AnnotationWriter not ported yet.");
+        return null; // TODO: port AnnotationWriter — annotations are dropped for now
     }
 
     public override void VisitTryCatchBlock(Label start, Label end, Label handler, string? type)
@@ -1467,7 +1466,7 @@ internal sealed class MethodWriter : MethodVisitor
         int typeRef, TypePath? typePath, string? descriptor, bool visible)
     {
         // TODO: Replace with AnnotationWriter when ported
-        throw new NotImplementedException("AnnotationWriter not ported yet.");
+        return null; // TODO: port AnnotationWriter — annotations are dropped for now
     }
 
     public override void VisitLocalVariable(
@@ -1524,7 +1523,7 @@ internal sealed class MethodWriter : MethodVisitor
         bool visible)
     {
         // TODO: Replace with AnnotationWriter when ported
-        throw new NotImplementedException("AnnotationWriter not ported yet.");
+        return null; // TODO: port AnnotationWriter — annotations are dropped for now
     }
 
     public override void VisitLineNumber(int line, Label start)
@@ -1914,16 +1913,7 @@ internal sealed class MethodWriter : MethodVisitor
                 // 6 header bytes and 2 bytes for local_variable_type_table_length.
                 size += 8 + localVariableTypeTable.Length;
             }
-            if (lastCodeRuntimeVisibleTypeAnnotation != null)
-            {
-                // TODO: Replace with AnnotationWriter when ported
-                throw new NotImplementedException("AnnotationWriter not ported yet.");
-            }
-            if (lastCodeRuntimeInvisibleTypeAnnotation != null)
-            {
-                // TODO: Replace with AnnotationWriter when ported
-                throw new NotImplementedException("AnnotationWriter not ported yet.");
-            }
+            // TODO: port AnnotationWriter — code type annotation checks skipped (fields always null)
             if (firstCodeAttribute != null)
             {
                 size +=
@@ -1937,24 +1927,7 @@ internal sealed class MethodWriter : MethodVisitor
             size += 8 + 2 * numberOfExceptions;
         }
         size += Attribute.ComputeAttributesSize(symbolTable, accessFlags, signatureIndex);
-        if (lastRuntimeVisibleAnnotation != null
-            || lastRuntimeInvisibleAnnotation != null
-            || lastRuntimeVisibleTypeAnnotation != null
-            || lastRuntimeInvisibleTypeAnnotation != null)
-        {
-            // TODO: Replace with AnnotationWriter when ported
-            throw new NotImplementedException("AnnotationWriter not ported yet.");
-        }
-        if (lastRuntimeVisibleParameterAnnotations != null)
-        {
-            // TODO: Replace with AnnotationWriter when ported
-            throw new NotImplementedException("AnnotationWriter not ported yet.");
-        }
-        if (lastRuntimeInvisibleParameterAnnotations != null)
-        {
-            // TODO: Replace with AnnotationWriter when ported
-            throw new NotImplementedException("AnnotationWriter not ported yet.");
-        }
+        // TODO: port AnnotationWriter — annotation/parameter checks skipped (fields always null)
         if (defaultValue != null)
         {
             symbolTable.AddConstantUtf8(Constants.ANNOTATION_DEFAULT);
@@ -2011,36 +1984,7 @@ internal sealed class MethodWriter : MethodVisitor
         {
             ++attributeCount;
         }
-        if (lastRuntimeVisibleAnnotation != null)
-        {
-            // TODO: Replace with AnnotationWriter when ported
-            throw new NotImplementedException("AnnotationWriter not ported yet.");
-        }
-        if (lastRuntimeInvisibleAnnotation != null)
-        {
-            // TODO: Replace with AnnotationWriter when ported
-            throw new NotImplementedException("AnnotationWriter not ported yet.");
-        }
-        if (lastRuntimeVisibleParameterAnnotations != null)
-        {
-            // TODO: Replace with AnnotationWriter when ported
-            throw new NotImplementedException("AnnotationWriter not ported yet.");
-        }
-        if (lastRuntimeInvisibleParameterAnnotations != null)
-        {
-            // TODO: Replace with AnnotationWriter when ported
-            throw new NotImplementedException("AnnotationWriter not ported yet.");
-        }
-        if (lastRuntimeVisibleTypeAnnotation != null)
-        {
-            // TODO: Replace with AnnotationWriter when ported
-            throw new NotImplementedException("AnnotationWriter not ported yet.");
-        }
-        if (lastRuntimeInvisibleTypeAnnotation != null)
-        {
-            // TODO: Replace with AnnotationWriter when ported
-            throw new NotImplementedException("AnnotationWriter not ported yet.");
-        }
+        // TODO: port AnnotationWriter — method annotation checks skipped (fields always null)
         if (defaultValue != null)
         {
             ++attributeCount;
@@ -2085,16 +2029,7 @@ internal sealed class MethodWriter : MethodVisitor
                 size += 8 + localVariableTypeTable.Length;
                 ++codeAttributeCount;
             }
-            if (lastCodeRuntimeVisibleTypeAnnotation != null)
-            {
-                // TODO: Replace with AnnotationWriter when ported
-                throw new NotImplementedException("AnnotationWriter not ported yet.");
-            }
-            if (lastCodeRuntimeInvisibleTypeAnnotation != null)
-            {
-                // TODO: Replace with AnnotationWriter when ported
-                throw new NotImplementedException("AnnotationWriter not ported yet.");
-            }
+            // TODO: port AnnotationWriter — code type annotation checks skipped (fields always null)
             if (firstCodeAttribute != null)
             {
                 size +=
@@ -2146,16 +2081,7 @@ internal sealed class MethodWriter : MethodVisitor
                     .PutShort(localVariableTypeTableLength)
                     .PutByteArray(localVariableTypeTable.Data, 0, localVariableTypeTable.Length);
             }
-            if (lastCodeRuntimeVisibleTypeAnnotation != null)
-            {
-                // TODO: Replace with AnnotationWriter when ported
-                throw new NotImplementedException("AnnotationWriter not ported yet.");
-            }
-            if (lastCodeRuntimeInvisibleTypeAnnotation != null)
-            {
-                // TODO: Replace with AnnotationWriter when ported
-                throw new NotImplementedException("AnnotationWriter not ported yet.");
-            }
+            // TODO: port AnnotationWriter — code type annotation checks skipped (fields always null)
             if (firstCodeAttribute != null)
             {
                 firstCodeAttribute.PutAttributes(
@@ -2174,24 +2100,7 @@ internal sealed class MethodWriter : MethodVisitor
             }
         }
         Attribute.PutAttributes(symbolTable, accessFlags, signatureIndex, output);
-        if (lastRuntimeVisibleAnnotation != null
-            || lastRuntimeInvisibleAnnotation != null
-            || lastRuntimeVisibleTypeAnnotation != null
-            || lastRuntimeInvisibleTypeAnnotation != null)
-        {
-            // TODO: Replace with AnnotationWriter when ported
-            throw new NotImplementedException("AnnotationWriter not ported yet.");
-        }
-        if (lastRuntimeVisibleParameterAnnotations != null)
-        {
-            // TODO: Replace with AnnotationWriter when ported
-            throw new NotImplementedException("AnnotationWriter not ported yet.");
-        }
-        if (lastRuntimeInvisibleParameterAnnotations != null)
-        {
-            // TODO: Replace with AnnotationWriter when ported
-            throw new NotImplementedException("AnnotationWriter not ported yet.");
-        }
+        // TODO: port AnnotationWriter — annotation/parameter checks skipped (fields always null)
         if (defaultValue != null)
         {
             output

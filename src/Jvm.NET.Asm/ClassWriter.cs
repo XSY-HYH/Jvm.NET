@@ -344,14 +344,14 @@ public sealed class ClassWriter : ClassVisitor
     /// <inheritdoc/>
     public override AnnotationVisitor? VisitAnnotation(string? descriptor, bool visible)
     {
-        throw new NotImplementedException("AnnotationWriter not ported yet.");
+        return null; // TODO: port AnnotationWriter — annotations are dropped for now
     }
 
     /// <inheritdoc/>
     public override AnnotationVisitor? VisitTypeAnnotation(
         int typeRef, TypePath? typePath, string? descriptor, bool visible)
     {
-        throw new NotImplementedException("AnnotationWriter not ported yet.");
+        return null; // TODO: port AnnotationWriter — annotations are dropped for now
     }
 
     /// <inheritdoc/>

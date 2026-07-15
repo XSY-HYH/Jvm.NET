@@ -157,6 +157,13 @@ public unsafe class JdkRuntimeBase : IJvmRuntime
                 _modifier.RegisterTransformer(_instrumentor);
             }
 
+            // WithJar 模式：自动初始化 Java 桥接类 com.xsy.jn.Bridge。
+            // 触发类加载，使 Bridge 的静态初始化器注册回调路由。
+            if (_options.Interop.Mode == InteropMode.WithJar && _options.Interop.AutoInitializeBridge)
+            {
+                _invoker?.LoadClass("com/xsy/jn/Bridge");
+            }
+
             _state = JvmRuntimeState.Running;
         }
         catch
@@ -259,9 +266,14 @@ public unsafe class JdkRuntimeBase : IJvmRuntime
     {
         var result = new List<string>(_options.VmArguments.Count + 1);
 
-        if (_options.Classpath.Count > 0)
+        // 合并用户 classpath 与桥接 jar 路径（WithJar 模式）
+        var classpathEntries = new List<string>(_options.Classpath);
+        if (_options.Interop.Mode == InteropMode.WithJar && !string.IsNullOrEmpty(_options.Interop.BridgeJarPath))
+            classpathEntries.Add(_options.Interop.BridgeJarPath);
+
+        if (classpathEntries.Count > 0)
         {
-            var cp = string.Join(Path.PathSeparator, _options.Classpath);
+            var cp = string.Join(Path.PathSeparator, classpathEntries);
             result.Add($"-Djava.class.path={cp}");
         }
 

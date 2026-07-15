@@ -11,6 +11,7 @@ This document lists the public API surface of `Jvm.NET`. Types live in the `Jvm.
 - [Bytecode modifier](#bytecode-modifier)
 - [Event listener](#event-listener)
 - [Value / handle types](#value--handle-types)
+- [Java/.NET interop](#javanet-interop)
 
 ## Initialization
 
@@ -32,6 +33,22 @@ This document lists the public API surface of `Jvm.NET`. Types live in the `Jvm.
 | `EnableBytecodeModification` | `bool` | Loads the JVMTI agent for `ClassFileLoadHook`. Default `true`. |
 | `EnableEventListening` | `bool` | Enables JVMTI event callbacks. Default `true`. |
 | `RequireJvmti` | `bool` | Throws if JVMTI cannot be obtained. |
+| `Interop` | `JvmInteropOptions` | Java/.NET interop options. Defaults to `NativeOnly` mode (pure JNI+ASM, no jar required). See [Java/.NET interop](#javanet-interop). |
+
+### `JvmInteropOptions`
+
+| Property | Type | Notes |
+| --- | --- | --- |
+| `Mode` | `InteropMode` | Interop mode. Defaults to `NativeOnly` (pure JNI+ASM). Set to `WithJar` to require `BridgeJarPath`. |
+| `BridgeJarPath` | `string?` | Absolute path to the Java bridge jar. Required when `Mode` is `WithJar`; automatically appended to `java.class.path`. |
+| `AutoInitializeBridge` | `bool` | Whether to auto-initialise the Java bridge class `com.xsy.jn.Bridge` at startup. Only effective in `WithJar` mode. Default `true`. |
+
+### `InteropMode` (enum)
+
+| Value | Notes |
+| --- | --- |
+| `NativeOnly` | Pure JNI+ASM mode, no Java bridge jar required. Java→C# callbacks via `RegisterNatives`. |
+| `WithJar` | Loads the Java bridge jar, providing a Java-side .NET object proxy and advanced callback routing. Requires `BridgeJarPath`. |
 
 ## JDK version abstraction
 
@@ -116,8 +133,28 @@ authors may derive from it or implement `IJvmRuntime` directly.
 | `InvokeStatic(JvmClass, string name, string sig, params JvmValue[] args) : JvmValue` | Calls a static method. |
 | `InvokeVirtual(JvmObject, string name, string sig, params JvmValue[] args) : JvmValue` | Calls an instance method. |
 | `RunMain(string jarPath, string mainClass, params string[] args) : void` | Loads the jar and invokes `public static void main(String[])`. |
+| `NewString(string str) : JvmValue` | Creates a Java `String` from a .NET `string` (modified UTF-8). The returned `JvmValue` holds a JNI local reference. |
 | `GetString(IntPtr javaStringHandle) : string` | Reads a Java `String` (modified UTF-8) into a .NET `string`. |
 | `NewStringArray(string[] args) : JvmValue` | Creates a Java `String[]` for passing to methods like `main`. |
+| `GetField(JvmObject, string name, string sig) : JvmValue` | Reads an instance field. `sig` is the field type signature (e.g. `I`, `Ljava/lang/String;`). |
+| `SetField(JvmObject, string name, string sig, JvmValue value) : void` | Writes an instance field. |
+| `GetStaticField(JvmClass, string name, string sig) : JvmValue` | Reads a static field. |
+| `SetStaticField(JvmClass, string name, string sig, JvmValue value) : void` | Writes a static field. |
+| `IsInstanceOf(JvmObject instance, JvmClass clazz) : bool` | Checks whether the object is an instance of the given class. |
+| `IsAssignableFrom(JvmClass from, JvmClass to) : bool` | Checks whether `from` is assignable to `to`. |
+| `GetSuperclass(JvmClass clazz) : JvmClass?` | Returns the superclass. Returns `null` for `Object` or interfaces. |
+| `GetObjectClass(JvmObject instance) : JvmClass` | Returns the runtime class of the object. |
+| `GetArrayLength(JvmValue array) : int` | Returns the array length. |
+| `GetObjectArrayElement(JvmValue array, int index) : JvmValue` | Reads an element of an object array. |
+| `SetObjectArrayElement(JvmValue array, int index, JvmValue value) : void` | Writes an element of an object array. |
+| `NewArray<T>(T[] values) : JvmValue` | Creates a Java primitive array filled with `values`. `T` must be `bool`/`byte`/`char`/`short`/`int`/`long`/`float`/`double`. |
+| `GetArrayValues<T>(JvmValue array) : T[]` | Reads all elements of a Java primitive array. |
+| `NewObjectArray(JvmClass elementClass, JvmValue[] elements) : JvmValue` | Creates a Java object array. |
+| `GetPendingException() : JvmObject?` | Returns the current pending exception (without clearing). Returns `null` when no exception is pending. |
+| `GetExceptionMessage(JvmObject exception) : string` | Calls `Throwable.getMessage()` and returns the message. |
+| `GetExceptionStackTrace(JvmObject exception) : string` | Calls `Throwable.getStackTrace()` and returns a stack-trace string. |
+| `RegisterCallback(JvmClass clazz, string methodName, string sig, Delegate callback) : void` | Registers a native method on `clazz` so Java code can call back into the .NET delegate. The delegate is held by a strong reference until `UnregisterCallbacks` is called or the Invoker is disposed. |
+| `UnregisterCallbacks(JvmClass clazz) : void` | Unregisters all native methods on `clazz` previously registered via `RegisterCallback`. |
 
 > Method / constructor signatures use JNI form, e.g. `(Ljava/lang/String;I)V`.
 
@@ -182,9 +219,126 @@ Each method returns an `IDisposable` that unregisters the handler (and turns off
 
 Discriminated union of every primitive JVM value plus object references. Factory helpers: `FromBoolean`, `FromByte`, `FromChar`, `FromShort`, `FromInt`, `FromLong`, `FromFloat`, `FromDouble`, `FromObject(IntPtr)`, `Null`.
 
-### `JvmClass` / `JvmObject`
+Accessors: `AsBoolean`, `AsByte`, `AsChar`, `AsShort`, `AsInt`, `AsLong`, `AsFloat`, `AsDouble`. The `ObjectHandle : IntPtr` property returns the object reference handle. The `Type : JvmValueType` property returns the currently held value type.
 
-Lightweight wrappers around raw `jclass` / `jobject` handles. Lifetime is owned by the JVM — the wrappers do **not** call `DeleteLocalRef`.
+### `JvmClass` / `JvmObject` (implement `IDisposable`)
 
-- `JvmClass` — `Handle : IntPtr`, `Name : string` (internal name, slash-separated).
-- `JvmObject` — `Handle : IntPtr`, `Class : JvmClass`.
+Wrappers around raw `jclass` / `jobject` handles. Both implement `IDisposable`.
+
+**Handle ownership**:
+- Instances created via `IJvmInvoker.FindClass` / `LoadClass` / `NewObject` **own** a JNI global reference; `Dispose` calls `DeleteGlobalRef`.
+- Instances created via the public constructors `new JvmClass(handle, name)` / `new JvmObject(handle, clazz)` do **not** own the handle; `Dispose` is a no-op. Use this to wrap local references returned by `InvokeVirtual` / `InvokeStatic` (local-reference lifetime is managed by the caller).
+- The `OwnsHandle : bool` property indicates whether the instance owns its handle.
+
+**Fields**:
+- `JvmClass` — `Handle : IntPtr`, `Name : string` (internal name, slash-separated), `OwnsHandle : bool`.
+- `JvmObject` — `Handle : IntPtr`, `Class : JvmClass`, `OwnsHandle : bool`.
+
+> When `JvmObject.Class.Handle` is `IntPtr.Zero` (a placeholder class), `IJvmInvoker.InvokeVirtual` falls back to `GetObjectClass` to obtain the object's runtime class for method-ID lookup. This lets you wrap a return value with `new JvmObject(handle, new JvmClass(IntPtr.Zero, "java/util/Set"))` and still call methods on it.
+
+## Java/.NET interop
+
+`Jvm.NET` provides bidirectional Java/.NET interop. The default `NativeOnly` mode is pure JNI+ASM and requires no additional Java jar.
+
+### `TypeMapper` (static)
+
+Automatic conversion between CLR and Java types.
+
+| Method | Description |
+| --- | --- |
+| `FromClr(object? value, IJvmInvoker) : JvmValue` | Converts a CLR value to `JvmValue`. Supports `string`, all primitive types, `JvmObject`, `JavaObject` subclasses. `null` becomes `JvmValue.Null`. |
+| `ToClr<T>(JvmValue value, IJvmInvoker) : T?` | Converts a `JvmValue` to a CLR type. When `T` is `string`, calls `GetString`; for value types, calls the matching `As*` method; for `JavaObject` subclasses, calls `Wrap`. |
+| `ToString(JvmValue value, IJvmInvoker) : string` | Calls `toString()` on the Java object. |
+| `ToStringArray(JvmValue arrayValue, IJvmInvoker) : string[]` | Reads a Java `String[]` into a .NET `string[]`. |
+| `Box(JvmValue value, IJvmInvoker) : JvmValue` | Boxes a primitive into its Java wrapper class (e.g. `int` → `Integer.valueOf(int)`). Used when passing CLR value types to Java `Object` parameters. |
+| `Unbox(JvmValue value, IJvmInvoker) : JvmValue` | Unboxes a Java wrapper class into a primitive (e.g. `Integer` → `intValue()`). Identifies the wrapper class via `getClass().getName()`. |
+
+### `JavaList<T>` (implements `IList<T>`, `IDisposable`)
+
+.NET wrapper for a Java `java.util.List`, providing `IList<T>` semantics.
+
+| Member | Description |
+| --- | --- |
+| `JavaList(IJvmInvoker invoker, JvmObject list)` | Wraps an existing Java List object. |
+| `NewArrayList(IJvmInvoker invoker) : JavaList<T>` | Creates a new `java.util.ArrayList`. |
+| `UnderlyingObject : JvmObject` | The wrapped Java object. |
+| `Count`, `IsReadOnly`, `this[int]`, `Add`, `Clear`, `Contains`, `CopyTo`, `IndexOf`, `Insert`, `Remove`, `RemoveAt` | Standard `IList<T>` members. |
+
+> When `T` is a CLR value type, `Add` / the indexer automatically call `TypeMapper.Box`; `ConvertFromJava` calls `TypeMapper.Unbox`.
+
+### `JavaMap<TKey, TValue>` (implements `IDictionary<TKey, TValue>`, `IDisposable`)
+
+.NET wrapper for a Java `java.util.Map`, providing `IDictionary<TKey, TValue>` semantics.
+
+| Member | Description |
+| --- | --- |
+| `JavaMap(IJvmInvoker invoker, JvmObject map)` | Wraps an existing Java Map object. |
+| `NewHashMap(IJvmInvoker invoker) : JavaMap<TKey, TValue>` | Creates a new `java.util.HashMap`. |
+| `UnderlyingObject : JvmObject` | The wrapped Java object. |
+| `Count`, `IsReadOnly`, `this[TKey]`, `Keys`, `Values`, `Add`, `Clear`, `Contains`, `ContainsKey`, `CopyTo`, `GetEnumerator`, `Remove`, `TryGetValue` | Standard `IDictionary<TKey, TValue>` members. |
+
+> Like `JavaList<T>`, when `TKey` / `TValue` are CLR value types, boxing/unboxing is automatic. `GetEnumerator` iterates via `entrySet().iterator()`, calling `getKey()` / `getValue()` on each `Map.Entry`.
+
+### `JavaObject` (abstract base, implements `IDisposable`)
+
+Base class for .NET wrappers of Java objects. Users subclass it to hand-write C# wrappers for Java classes, or use the Source Generator to auto-generate them.
+
+**Usage**:
+1. Subclass `JavaObject` and mark the Java class name with `[JavaClass]`.
+2. Create new instances via the `Create<T>` factory, or wrap existing objects with `Wrap<T>`.
+3. Operate on the object via `Invoke` / `GetField` / `SetField` and other protected methods.
+
+| Member | Description |
+| --- | --- |
+| `Handle : JvmObject` | The wrapped Java object handle. Throws if not initialised. |
+| `Invoker : IJvmInvoker` | The associated invoker. Throws if not initialised. |
+| `JavaClassName : string` (protected virtual) | Fully-qualified Java class name (dot-separated). Defaults to the `[JavaClass]` attribute; can be overridden. |
+| `Create<T>(IJvmInvoker, string ctorSig, params JvmValue[] args) : T` (static) | Creates a new `T`: loads the Java class, invokes the constructor, returns the wrapped object. |
+| `Wrap<T>(IJvmInvoker, JvmObject obj) : T` (static) | Wraps an existing Java object. |
+| `Invoke(string name, string sig, params JvmValue[] args) : JvmValue` (protected) | Calls an instance method. |
+| `Invoke<T>(string name, string sig, params JvmValue[] args) : T?` (protected) | Calls an instance method and converts the return value via `TypeMapper.ToClr<T>`. |
+| `InvokeStatic(string name, string sig, params JvmValue[] args) : JvmValue` (protected) | Calls a static method. |
+| `InvokeStatic<T>(...) : T?` (protected) | Calls a static method and converts the return value. |
+| `GetField(string name, string sig) : JvmValue` (protected) | Reads an instance field. |
+| `GetField<T>(string name, string sig) : T?` (protected) | Reads an instance field and converts. |
+| `SetField(string name, string sig, JvmValue value) : void` (protected) | Writes an instance field. |
+| `GetStaticField(string name, string sig) : JvmValue` (protected) | Reads a static field. |
+| `SetStaticField(string name, string sig, JvmValue value) : void` (protected) | Writes a static field. |
+| `IsInstanceOf(string javaClassName) : bool` | Checks whether this object is an instance of the given Java class. |
+| `Dispose() : void` | Disposes the wrapped `JvmObject`. |
+
+### Attribute classes
+
+| Attribute | Target | Description |
+| --- | --- | --- |
+| `[JavaClass(string name)]` | Class | Marks the Java class name for a C# class (e.g. `java.util.ArrayList`). Read automatically by `JavaObject`. |
+| `[JavaMethod(string name, string signature)]` | Method | Marks a C# method as mapping to a Java method. The `IsStatic` property indicates a static method. The Source Generator reads this attribute to generate call code. |
+| `[JavaField(string name, string signature)]` | Property | Marks a C# property as mapping to a Java field. The `IsStatic` property indicates a static field. The Source Generator reads this attribute to generate access code. |
+
+### Source Generator (`Jvm.NET.SourceGenerator` package)
+
+After referencing `Jvm.NET.SourceGenerator`, `partial` classes marked with `[JavaClass]` / `[JavaMethod]` / `[JavaField]` auto-generate strongly-typed wrapper code. You only declare the partial method signatures; the SG emits the JNI call implementation.
+
+```csharp
+using Jvm.NET.Abstractions;
+
+[JavaClass("java.util.ArrayList")]
+public sealed partial class JavaArrayList : JavaObject
+{
+    [JavaMethod("add", "(Ljava/lang/Object;)Z")]
+    public partial bool Add(object? item);
+
+    [JavaMethod("size", "()I")]
+    public partial int Count();
+}
+```
+
+### Java bridge jar (`WithJar` mode)
+
+The optional Java bridge jar (sources under `src/Jvm.NET.JavaBridge/`) provides a Java-side .NET object proxy and advanced callback routing.
+
+**Core classes**:
+- `com.xsy.jn.Bridge`: Java bridge entry point with native methods (`onBridgeInitialized`, `registerDotNetObject`, `invokeDotNetMethod`, `getDotNetField`, `setDotNetField`, `isInstanceOf`). The static initialiser calls `onBridgeInitialized()` to notify the .NET side.
+- `com.xsy.jn.DotNetObject`: Java proxy for a .NET object, routing calls back to .NET via Bridge native methods. `finalize()` automatically calls `unregisterDotNetObject`.
+
+**Build**: run `src/Jvm.NET.JavaBridge/build.ps1` (Windows) or `build.sh` (Linux/macOS) to produce `dist/jn-bridge.jar`. Requires `javac` and `jar` (from `JAVA_HOME` or `PATH`).

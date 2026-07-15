@@ -269,6 +269,151 @@ var mainArgs = invoker.NewStringArray(Array.Empty<string>());
 invoker.InvokeStatic(helloForOverride, "main", "([Ljava/lang/String;)V", mainArgs);
 Console.WriteLine();
 
+// 13) 互操作：字段访问（实例字段 + 静态字段）
+Console.WriteLine("=== Test 13: Field access (instance + static) ===");
+invoker.LoadJar(jarPath);
+var interopClass = invoker.LoadClass("InteropTarget");
+var interopObj = invoker.NewObject(interopClass, "(ILjava/lang/String;)V",
+    JvmValue.FromInt(42), invoker.NewString("test-instance"));
+var fIntValue = invoker.GetField(interopObj, "intValue", "I").AsInt();
+var fNameValue = invoker.GetString(invoker.GetField(interopObj, "name", "Ljava/lang/String;").ObjectHandle);
+Console.WriteLine($"    intValue={fIntValue} (expected 42), name=\"{fNameValue}\" (expected \"test-instance\")");
+invoker.SetField(interopObj, "intValue", "I", JvmValue.FromInt(100));
+var fNewInt = invoker.GetField(interopObj, "intValue", "I").AsInt();
+Console.WriteLine($"    After SetField: intValue={fNewInt} (expected 100)");
+var fVersion = invoker.GetString(invoker.GetStaticField(interopClass, "VERSION", "Ljava/lang/String;").ObjectHandle);
+var fTotal = invoker.GetStaticField(interopClass, "s_total", "J").AsLong();
+Console.WriteLine($"    Static VERSION=\"{fVersion}\", s_total={fTotal} (expected >= 42)");
+Console.WriteLine();
+
+// 14) 互操作：数组操作（基本类型数组 + 对象数组）
+Console.WriteLine("=== Test 14: Array operations (primitive + object arrays) ===");
+var arrVal = invoker.InvokeVirtual(interopObj, "makeIntArray", "(II)[I",
+    JvmValue.FromInt(5), JvmValue.FromInt(7));
+var arrLen = invoker.GetArrayLength(arrVal);
+var arrVals = invoker.GetArrayValues<int>(arrVal);
+Console.WriteLine($"    makeIntArray(5,7): length={arrLen}, values=[{string.Join(",", arrVals)}] (expected 7,7,7,7,7)");
+var newArr = invoker.NewArray(new int[] { 10, 20, 30 });
+var newVals = invoker.GetArrayValues<int>(newArr);
+Console.WriteLine($"    NewArray: values=[{string.Join(",", newVals)}] (expected 10,20,30)");
+var strArrVal = invoker.InvokeVirtual(interopObj, "makeStringArray", "()[Ljava/lang/String;");
+var strArrLen = invoker.GetArrayLength(strArrVal);
+Console.WriteLine($"    makeStringArray: length={strArrLen} (expected 3)");
+for (int i = 0; i < strArrLen; i++)
+{
+    var elem = invoker.GetObjectArrayElement(strArrVal, i);
+    var s = invoker.GetString(elem.ObjectHandle);
+    Console.WriteLine($"      [{i}] = \"{s}\"");
+}
+Console.WriteLine();
+
+// 15) 互操作：Java 集合（JavaList + JavaMap）
+Console.WriteLine("=== Test 15: Java collections (JavaList + JavaMap) ===");
+var listVal = invoker.InvokeVirtual(interopObj, "makeList", "()Ljava/util/List;");
+var listClass = invoker.LoadClass("java.util.List");
+var javaList = new JavaList<string>(invoker, new JvmObject(listVal.ObjectHandle, listClass));
+Console.WriteLine($"    JavaList count={javaList.Count} (expected 3)");
+foreach (var item in javaList)
+    Console.WriteLine($"      item: \"{item}\"");
+// 测试 Add
+JavaList<string> ownedList = JavaList<string>.NewArrayList(invoker);
+ownedList.Add("dotnet-1");
+ownedList.Add("dotnet-2");
+Console.WriteLine($"    NewArrayList after Add: count={ownedList.Count} (expected 2)");
+ownedList.Dispose();
+
+var mapVal = invoker.InvokeVirtual(interopObj, "makeMap", "()Ljava/util/Map;");
+var mapClass = invoker.LoadClass("java.util.Map");
+var javaMap = new JavaMap<string, int>(invoker, new JvmObject(mapVal.ObjectHandle, mapClass));
+Console.WriteLine($"    JavaMap count={javaMap.Count} (expected 3)");
+foreach (var kv in javaMap)
+    Console.WriteLine($"      {kv.Key}={kv.Value}");
+javaMap.Dispose();
+Console.WriteLine();
+
+// 16) 互操作：类型检查（IsInstanceOf / IsAssignableFrom / GetSuperclass / GetObjectClass）
+Console.WriteLine("=== Test 16: Type checks (IsInstanceOf / GetSuperclass) ===");
+var objClass = invoker.GetObjectClass(interopObj);
+Console.WriteLine($"    GetObjectClass: {objClass.Name} (expected InteropTarget)");
+var stringClass = invoker.LoadClass("java.lang.String");
+var isString = invoker.IsInstanceOf(interopObj, stringClass);
+Console.WriteLine($"    IsInstanceOf(interopObj, String): {isString} (expected False)");
+var isStrResult = invoker.InvokeStatic(interopClass, "isString", "(Ljava/lang/Object;)Z",
+    invoker.NewString("hello")).AsBoolean();
+Console.WriteLine($"    isString(\"hello\"): {isStrResult} (expected True)");
+var super = invoker.GetSuperclass(interopClass);
+Console.WriteLine($"    GetSuperclass(InteropTarget): {super?.Name ?? "<null>"} (expected java.lang.Object)");
+var objSuper = invoker.LoadClass("java.lang.Object");
+var assignable = invoker.IsAssignableFrom(interopClass, objSuper);
+Console.WriteLine($"    IsAssignableFrom(InteropTarget, Object): {assignable} (expected True)");
+Console.WriteLine();
+
+// 17) 互操作：异常获取（GetPendingException / GetExceptionMessage / GetExceptionStackTrace）
+Console.WriteLine("=== Test 17: Exception handling (GetExceptionMessage / StackTrace) ===");
+try
+{
+    invoker.InvokeStatic(interopClass, "throwNamed", "(Ljava/lang/String;)V",
+        invoker.NewString("interop-exception-test"));
+}
+catch (JvmException ex)
+{
+    Console.WriteLine($"    JvmException caught: {ex.Message}");
+    var pending = invoker.GetPendingException();
+    if (pending is not null)
+    {
+        var msg = invoker.GetExceptionMessage(pending);
+        Console.WriteLine($"    GetExceptionMessage: \"{msg}\" (expected \"interop-exception-test\")");
+        var trace = invoker.GetExceptionStackTrace(pending);
+        var firstLine = trace.Split('\n', StringSplitOptions.RemoveEmptyEntries)[0].Trim();
+        Console.WriteLine($"    StackTrace first line: {firstLine}");
+    }
+    else
+    {
+        Console.WriteLine("    (pending exception already cleared)");
+    }
+}
+Console.WriteLine();
+
+// 18) 互操作：TypeMapper 类型转换
+Console.WriteLine("=== Test 18: TypeMapper conversions ===");
+var tmInt = TypeMapper.FromClr(123, invoker);
+Console.WriteLine($"    FromClr(123).AsInt() = {tmInt.AsInt()} (expected 123)");
+var tmStr = TypeMapper.FromClr("hello-typemapper", invoker);
+var tmStrBack = TypeMapper.ToString(tmStr, invoker);
+Console.WriteLine($"    FromClr(\"hello-typemapper\") -> ToString = \"{tmStrBack}\"");
+var tmBool = TypeMapper.FromClr(true, invoker);
+Console.WriteLine($"    FromClr(true).AsBoolean() = {tmBool.AsBoolean()} (expected True)");
+var tmLong = TypeMapper.FromClr(9999999999L, invoker);
+Console.WriteLine($"    FromClr(9999999999L).AsLong() = {tmLong.AsLong()} (expected 9999999999)");
+var tmDouble = TypeMapper.FromClr(3.14, invoker);
+Console.WriteLine($"    FromClr(3.14).AsDouble() = {tmDouble.AsDouble()} (expected 3.14)");
+var tmBack = TypeMapper.ToClr<int>(tmInt, invoker);
+Console.WriteLine($"    ToClr<int>(123) = {tmBack} (expected 123)");
+Console.WriteLine();
+
+// 19) 互操作：JavaObject 基类 + 特性驱动封装
+Console.WriteLine("=== Test 19: JavaObject base class + attribute-driven wrapper ===");
+var wrapper = InteropTargetWrapper.Create(invoker, 777, "via-wrapper");
+Console.WriteLine($"    Wrapper created: Value={wrapper.Value}, Name=\"{wrapper.Name}\"");
+var greetResult = wrapper.Greet("world");
+Console.WriteLine($"    Greet(\"world\"): \"{greetResult}\"");
+var counter = wrapper.GetCounter();
+Console.WriteLine($"    Static counter: {counter}");
+wrapper.Dispose();
+Console.WriteLine();
+
+// 20) 互操作：对象参数传递（Java 对象作为方法参数）
+Console.WriteLine("=== Test 20: Object parameter passing ===");
+var objA = invoker.NewObject(interopClass, "(ILjava/lang/String;)V",
+    JvmValue.FromInt(1), invoker.NewString("Alice"));
+var objB = invoker.NewObject(interopClass, "(ILjava/lang/String;)V",
+    JvmValue.FromInt(2), invoker.NewString("Bob"));
+var greetVal = invoker.InvokeVirtual(objA, "greet", "(LInteropTarget;)Ljava/lang/String;",
+    JvmValue.FromObject(objB.Handle));
+var greetStr = invoker.GetString(greetVal.ObjectHandle);
+Console.WriteLine($"    greet(Alice, Bob): \"{greetStr}\" (expected \"Alice greets Bob\")");
+Console.WriteLine();
+
 Console.WriteLine("[Harness] All tests completed.");
 
 // ---- 本地函数 ----
@@ -507,5 +652,47 @@ sealed class RecordingTransformer : IBytecodeTransformer
         if (className == _targetClass)
             Interlocked.Increment(ref _hitCount);
         return null;
+    }
+}
+
+// ---- JavaObject 基类 + 特性驱动封装（Test 19 用）----
+[JavaClass("InteropTarget")]
+sealed class InteropTargetWrapper : JavaObject
+{
+    public static InteropTargetWrapper Create(IJvmInvoker invoker, int value, string name)
+        => Create<InteropTargetWrapper>(invoker, "(ILjava/lang/String;)V",
+            JvmValue.FromInt(value), invoker.NewString(name));
+
+    public int Value => GetField<int>("intValue", "I");
+
+    public string Name
+    {
+        get
+        {
+            var v = GetField("name", "Ljava/lang/String;");
+            return Invoker.GetString(v.ObjectHandle) ?? "";
+        }
+    }
+
+    public string Greet(string otherName)
+    {
+        // 构造另一个 InteropTarget 作为参数
+        var other = Create(Invoker, 0, otherName);
+        try
+        {
+            var result = Invoke("greet", "(LInteropTarget;)Ljava/lang/String;",
+                JvmValue.FromObject(other.Handle.Handle));
+            return Invoker.GetString(result.ObjectHandle) ?? "";
+        }
+        finally
+        {
+            other.Dispose();
+        }
+    }
+
+    public int GetCounter()
+    {
+        var v = InvokeStatic("getCounter", "()I");
+        return v.AsInt();
     }
 }

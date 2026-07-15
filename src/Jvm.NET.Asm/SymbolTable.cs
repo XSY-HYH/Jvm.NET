@@ -404,15 +404,15 @@ internal sealed class SymbolTable
             }
         }
         // TODO: Handle - uncomment when Handle is ported
-        // else if (value is Handle handle)
-        // {
-        //     return AddConstantMethodHandle(
-        //         handle.GetTag(),
-        //         handle.GetOwner(),
-        //         handle.GetName(),
-        //         handle.GetDesc(),
-        //         handle.IsInterface());
-        // }
+        else if (value is Handle handle)
+        {
+            return AddConstantMethodHandle(
+                handle.GetTag(),
+                handle.GetOwner(),
+                handle.GetName(),
+                handle.GetDesc(),
+                handle.IsInterface());
+        }
         // TODO: ConstantDynamic - uncomment when ConstantDynamic is ported
         // else if (value is ConstantDynamic constantDynamic)
         // {

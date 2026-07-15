@@ -49,6 +49,13 @@ error.log
 # Java 编译产物
 # ====================
 tests/Jvm.NET.Harness/Java/build/
+src/Jvm.NET/JavaBridge/build/
+src/Jvm.NET/JavaBridge/dist/
+
+# ====================
+# Minecraft 测试项目（含硬编码本地路径，不提交）
+# ====================
+tests/Jvm.NET.Minecraft/
 
 # ====================
 # 构建脚本本地缓存

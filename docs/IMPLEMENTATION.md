@@ -12,6 +12,7 @@
 2. [JNI 调用 / JNI Invocation](#2-jni-调用--jni-invocation)
 3. [字节码修改 / Bytecode Modification](#3-字节码修改--bytecode-modification)
 4. [事件监听 / Event Listening](#4-事件监听--event-listening)
+5. [Java/.NET 互操作 / Java/.NET Interop](#5-javanet-互操作--javanet-interop)
 
 ---
 
@@ -234,3 +235,47 @@ JVMTI capabilities fall into two categories:
 - **Exception**: wraps the method body in a try-catch(all) block; the catch handler calls `JnBridge.onException(className, methodName, exception)` then `athrow`.
 - **Limitation**: constructors (`<init>`) are not instrumented for Exception (try-catch across `super.<init>()` causes stackmap frame mismatch: uninitializedThis vs class name).
 - **Requirement**: both `EnableBytecodeModification` and `EnableEventListening` must be `true`.
+
+---
+
+## 5. Java/.NET 互操作 / Java/.NET Interop
+
+### 中文
+
+Jvm.NET 的互操作分为两个方向：**C#→Java**（通过 JNI 直接调用）和 **Java→C#**（通过 `RegisterNatives` 回调）。默认的 `NativeOnly` 模式纯基于 JNI+ASM，无需额外 Java jar。
+
+**分层架构**（L0-L6）：
+
+| 层 | 内容 |
+| --- | --- |
+| L0 | JNI 底层扩展：字段访问（GetField/SetField/GetStaticField/SetStaticField）、数组操作（NewArray/GetArrayValues/GetArrayLength/GetObjectArrayElement）、异常获取（GetPendingException/GetExceptionMessage/GetExceptionStackTrace）、类型检查（IsInstanceOf/IsAssignableFrom/GetSuperclass/GetObjectClass）。 |
+| L1 | 通用回调 API：`JvmCallbackRegistry` + `IJvmInvoker.RegisterCallback`。通过 `RegisterNatives` 把 .NET 委托注册为 Java 类的 native 方法，Java 代码调用时通过 JNI 函数表回调到 .NET。委托被 `GCHandle.Alloc` 强引用保持，避免 GC 回收。 |
+| L2 | 对象生命周期：`JvmClass` / `JvmObject` 实现 `IDisposable`。通过 `FindClass` / `LoadClass` / `NewObject` 创建的实例拥有 JNI 全局引用，`Dispose` 时调用 `DeleteGlobalRef`；通过公共构造函数创建的实例不拥有句柄。`OwnsHandle` 属性指示所有权。 |
+| L3 | 类型映射层：`TypeMapper.FromClr` / `ToClr<T>` 处理 CLR↔Java 自动转换。`JavaList<T>` 实现 `IList<T>`，`JavaMap<TKey, TValue>` 实现 `IDictionary<TKey, TValue>`，通过调用 Java 集合方法（add/size/get/put/entrySet/iterator）实现。 |
+| L4 | `JavaObject` 抽象基类 + `[JavaClass]` / `[JavaMethod]` / `[JavaField]` 特性。`Create<T>` 工厂方法加载 Java 类、调用构造函数、返回包装对象；`Wrap<T>` 包装已有对象。protected 方法（Invoke/GetField/SetField 等）封装 JNI 调用。 |
+| L5 | Source Generator（`Jvm.NET.SourceGenerator` 包）：扫描标记了 `[JavaClass]` 的 `partial` 类，为每个 `[JavaMethod]` / `[JavaField]` 标记的 partial 方法/属性生成 JNI 调用实现。 |
+| L6 | 可选 Java 桥接 jar（`WithJar` 模式）：`com.xsy.jn.Bridge` 提供 Java 侧的 .NET 对象代理（`DotNetObject`），通过 native 方法路由到 .NET。`NativeOnly` 模式不需要此 jar。 |
+
+**值类型装箱/拆箱**：Java 集合（List/Map）的元素类型是 `Object`，CLR 值类型（int/long/double 等）传给 Java Object 参数时必须装箱为对应的 java.lang.Integer/Long/Double 等包装类，否则 JVM 会把基本类型的位模式当作对象指针解引用导致崩溃。`TypeMapper.Box` 调用 `Integer.valueOf(int)` 等装箱；`TypeMapper.Unbox` 通过 `getClass().getName()` 识别包装类后调用 `intValue()` 等拆箱。`JavaList<T>` / `JavaMap<K,V>` 在 `typeof(T).IsValueType` 时自动调用 Box/Unbox。
+
+**占位类兜底**：当 `InvokeVirtual` 收到的 `JvmObject.Class.Handle` 为 `IntPtr.Zero`（占位类，用于包装返回值）时，通过 `GetObjectClass` 获取对象的实际运行时类来查找方法 ID。这允许用 `new JvmObject(handle, new JvmClass(IntPtr.Zero, "java/util/Set"))` 包装 `entrySet()` 的返回值后调用 `iterator()`。
+
+### English
+
+Jvm.NET's interop has two directions: **C#→Java** (direct JNI calls) and **Java→C#** (callbacks via `RegisterNatives`). The default `NativeOnly` mode is pure JNI+ASM and requires no additional Java jar.
+
+**Layered architecture** (L0-L6):
+
+| Layer | Content |
+| --- | --- |
+| L0 | Low-level JNI extensions: field access (GetField/SetField/GetStaticField/SetStaticField), array ops (NewArray/GetArrayValues/GetArrayLength/GetObjectArrayElement), exception access (GetPendingException/GetExceptionMessage/GetExceptionStackTrace), type checks (IsInstanceOf/IsAssignableFrom/GetSuperclass/GetObjectClass). |
+| L1 | Generic callback API: `JvmCallbackRegistry` + `IJvmInvoker.RegisterCallback`. Registers .NET delegates as native methods on Java classes via `RegisterNatives`; when Java code calls them, the JNI function table routes back to .NET. Delegates are held by `GCHandle.Alloc` to prevent GC. |
+| L2 | Object lifetime: `JvmClass` / `JvmObject` implement `IDisposable`. Instances created via `FindClass` / `LoadClass` / `NewObject` own a JNI global reference, released by `DeleteGlobalRef` on `Dispose`; instances created via the public constructors do not own the handle. `OwnsHandle` indicates ownership. |
+| L3 | Type mapping: `TypeMapper.FromClr` / `ToClr<T>` handle CLR↔Java conversion. `JavaList<T>` implements `IList<T>`, `JavaMap<TKey, TValue>` implements `IDictionary<TKey, TValue>`, by calling Java collection methods (add/size/get/put/entrySet/iterator). |
+| L4 | `JavaObject` abstract base + `[JavaClass]` / `[JavaMethod]` / `[JavaField]` attributes. The `Create<T>` factory loads the Java class, invokes the constructor, returns the wrapper; `Wrap<T>` wraps an existing object. Protected methods (Invoke/GetField/SetField etc.) wrap JNI calls. |
+| L5 | Source Generator (`Jvm.NET.SourceGenerator` package): scans `partial` classes marked with `[JavaClass]` and generates JNI call implementations for each `[JavaMethod]` / `[JavaField]`-marked partial method/property. |
+| L6 | Optional Java bridge jar (`WithJar` mode): `com.xsy.jn.Bridge` provides a Java-side .NET object proxy (`DotNetObject`) that routes calls back to .NET via native methods. Not required in `NativeOnly` mode. |
+
+**Value-type boxing/unboxing**: Java collection elements are typed `Object`; CLR value types (int/long/double etc.) must be boxed to java.lang.Integer/Long/Double etc. before being passed to Java Object parameters, otherwise the JVM dereferences the primitive bit pattern as an object pointer and crashes. `TypeMapper.Box` calls `Integer.valueOf(int)` etc. to box; `TypeMapper.Unbox` identifies the wrapper class via `getClass().getName()` and calls `intValue()` etc. to unbox. `JavaList<T>` / `JavaMap<K,V>` auto-invoke Box/Unbox when `typeof(T).IsValueType`.
+
+**Placeholder-class fallback**: When `InvokeVirtual` receives a `JvmObject` whose `Class.Handle` is `IntPtr.Zero` (a placeholder class used to wrap return values), it falls back to `GetObjectClass` to obtain the object's runtime class for method-ID lookup. This lets you wrap the return of `entrySet()` with `new JvmObject(handle, new JvmClass(IntPtr.Zero, "java/util/Set"))` and still call `iterator()` on it.
