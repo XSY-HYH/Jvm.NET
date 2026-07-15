@@ -20,11 +20,16 @@
     <RepositoryUrl>https://github.com/XSY-HYH/Jvm.NET</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <Copyright>Copyright (c) XSY_xiaoqi</Copyright>
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
 
     <Platforms>x64;arm64</Platforms>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
 </Project>
