@@ -68,4 +68,4 @@ File.WriteAllBytes("HelloGen.class", writer.ToByteArray());
 
 ## License
 
-GPL-3.0-only © XSY_xiaoqi
+LGPL-3.0-only © XSY_xiaoqi

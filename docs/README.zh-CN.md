@@ -72,4 +72,4 @@ Console.WriteLine($"answer={map["answer"]}");
 
 ## 许可证
 
-GPL-3.0-only © XSY_xiaoqi
+LGPL-3.0-only © XSY_xiaoqi

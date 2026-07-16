@@ -55,4 +55,4 @@ Console.WriteLine($"count={list.Count}, first={list.Get(0)}");
 
 ## License
 
-GPL-3.0-only © XSY_xiaoqi
+LGPL-3.0-only © XSY_xiaoqi
