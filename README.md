@@ -3,7 +3,7 @@
 A production-grade .NET library that embeds an in-process JVM and lets you drive it from C#:
 launch jars with arguments, rewrite bytecode at runtime, and listen to Java method / VM events.
 
-> First stable release targeting **OpenJDK 21 (LTS)**.
+> Supports **OpenJDK 21 (LTS) through 25** — pick your JDK at init time via `Version = 21..25`.
 
 ## Highlights
 
