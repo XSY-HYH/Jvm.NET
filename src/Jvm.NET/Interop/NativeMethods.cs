@@ -21,6 +21,16 @@ internal static class NativeMethods
         return Marshal.GetDelegateForFunctionPointer<JniDelegates.JNI_CreateJavaVMDelegate>(ptr);
     }
 
+    /// <summary>
+    /// 以 unmanaged function pointer 形式返回 <c>JNI_CreateJavaVM</c>，
+    /// 避免 .NET 10 委托 marshalling 对 out/ref IntPtr 参数的兼容性问题。
+    /// </summary>
+    public static unsafe delegate* unmanaged[Cdecl]<IntPtr*, IntPtr*, void*, int> GetCreateJavaVMPtr(INativeLibraryLoader loader, IntPtr libraryHandle)
+    {
+        var ptr = loader.GetExport(libraryHandle, CreateJavaVM);
+        return (delegate* unmanaged[Cdecl]<IntPtr*, IntPtr*, void*, int>)ptr;
+    }
+
     /// <summary>Resolves <c>JNI_GetDefaultJavaVMInitArgs</c> from <paramref name="libraryHandle"/>.</summary>
     public static JniDelegates.JNI_GetDefaultJavaVMInitArgsDelegate GetGetDefaultJavaVMInitArgs(INativeLibraryLoader loader, IntPtr libraryHandle)
     {

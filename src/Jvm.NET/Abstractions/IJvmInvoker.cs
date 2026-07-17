@@ -26,6 +26,17 @@ public interface IJvmInvoker
     JvmClass LoadClass(string fullyQualifiedName);
 
     /// <summary>
+    /// 从字节码直接定义一个 Java 类（等价于 JNI DefineClass）。
+    /// <para>
+    /// 不需要 class 文件存在于磁盘，字节码在内存中直接定义。
+    /// 适用于动态生成的类（如 ASM 生成的桥接类）。
+    /// </para>
+    /// </summary>
+    /// <param name="name">类的内部名称（斜杠分隔，如 <c>com/xsy/jn/test/JnBridge</c>）。</param>
+    /// <param name="bytecode">class 文件格式的字节码。</param>
+    JvmClass DefineClass(string name, byte[] bytecode);
+
+    /// <summary>
     /// Allocates a new instance of <paramref name="clazz"/> and invokes the constructor
     /// matching <paramref name="constructorSignature"/>.
     /// </summary>
@@ -174,4 +185,22 @@ public interface IJvmInvoker
 
     /// <summary>注销 <paramref name="clazz"/> 上所有通过 <see cref="RegisterCallback"/> 注册的 native 方法。</summary>
     void UnregisterCallbacks(JvmClass clazz);
+
+    // ---- 全局引用管理 ----
+
+    /// <summary>
+    /// 将 JNI 局部引用提升为全局引用。<para/>
+    /// <see cref="InvokeStatic"/> / <see cref="InvokeVirtual"/> / <see cref="NewObject"/> 返回的句柄是局部引用，
+    /// 仅在当前 JNI 帧内有效。若需要在回调结束后继续使用（如存储到静态字段供后续回调读取），
+    /// 必须通过本方法提升为全局引用，并在不再使用时调用 <see cref="DeleteGlobalRef"/> 释放。
+    /// </summary>
+    /// <param name="localRef">局部引用句柄。</param>
+    /// <returns>全局引用句柄，失败返回 <see cref="IntPtr.Zero"/>。</returns>
+    IntPtr NewGlobalRef(IntPtr localRef);
+
+    /// <summary>
+    /// 释放通过 <see cref="NewGlobalRef"/> 创建的全局引用。
+    /// </summary>
+    /// <param name="globalRef">全局引用句柄。</param>
+    void DeleteGlobalRef(IntPtr globalRef);
 }

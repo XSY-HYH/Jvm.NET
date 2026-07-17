@@ -224,12 +224,34 @@ public unsafe class JdkRuntimeBase : IJvmRuntime
         _libraryHandle = _loader.Load(_options.JdkBinPath);
         if (_libraryHandle == IntPtr.Zero)
             throw new DllNotFoundException("Native JVM library could not be loaded.");
+
+        // 注册 DllImportResolver，让 [DllImport("jvm")] 能解析到已加载的 jvm.dll
+        // 这避免了 .NET 10 的 delegate* unmanaged / Marshal.GetDelegateForFunctionPointer
+        // 在 P/Invoke thunk 中的崩溃问题
+        s_jvmHandle = _libraryHandle;
+        _jvmLibraryName = Path.GetFileNameWithoutExtension(
+            NativeLibraryNames.ForCurrentPlatform);
+        NativeLibrary.SetDllImportResolver(
+            typeof(JdkRuntimeBase).Assembly,
+            JvmDllImportResolver);
     }
 
-    private void CreateJavaVm()
-    {
-        var createVm = NativeMethods.GetCreateJavaVM(_loader, _libraryHandle);
+    private static IntPtr s_jvmHandle;
+    private static string? _jvmLibraryName;
 
+    private static IntPtr JvmDllImportResolver(
+        string libraryName, System.Reflection.Assembly assembly, DllImportSearchPath? searchPath)
+    {
+        if (string.Equals(libraryName, _jvmLibraryName, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(libraryName, "jvm", StringComparison.OrdinalIgnoreCase))
+        {
+            return s_jvmHandle;
+        }
+        return IntPtr.Zero;
+    }
+
+    private unsafe void CreateJavaVm()
+    {
         // Build the JavaVMOption array in unmanaged memory so JNI sees a stable pointer.
         var optionStrings = BuildOptionStrings();
         var optionHandles = new JavaVMOption[optionStrings.Count];
@@ -250,9 +272,17 @@ public unsafe class JdkRuntimeBase : IJvmRuntime
                 IgnoreUnrecognized = JniTypes.JNI_TRUE,
             };
 
-            int rc = createVm(out _javaVm, out _jniEnv, (IntPtr)(&args));
-            if (rc != NativeConstants.JNI_OK)
-                throw new InvalidOperationException($"JNI_CreateJavaVM returned {rc} (expected JNI_OK={NativeConstants.JNI_OK}).");
+            // 用 unsafe 指针调用 JNI_CreateJavaVM，完全绕过 marshalling。
+            // 方法本身已是 unsafe，args 是局部 struct，直接取地址即可（fixed 会触发 CS0213）。
+            {
+                IntPtr javaVm = IntPtr.Zero;
+                IntPtr jniEnv = IntPtr.Zero;
+                int rc = PInvoke.CreateJavaVM(&javaVm, &jniEnv, &args);
+                _javaVm = javaVm;
+                _jniEnv = jniEnv;
+                if (rc != NativeConstants.JNI_OK)
+                    throw new InvalidOperationException($"JNI_CreateJavaVM returned {rc} (expected JNI_OK={NativeConstants.JNI_OK}).");
+            }
         }
         finally
         {

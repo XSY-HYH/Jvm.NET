@@ -72,7 +72,7 @@ internal static class JniDelegates
     // Cdecl is used because on x64/arm64 (the only platforms we target — see csproj
     // <Platforms>x64;arm64</Platforms>) Cdecl and Stdcall collapse to the same ABI.
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-    public delegate int JNI_CreateJavaVMDelegate(out IntPtr javaVm, out IntPtr jniEnv, IntPtr args);
+    public delegate int JNI_CreateJavaVMDelegate(ref IntPtr javaVm, ref IntPtr jniEnv, IntPtr args);
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     public delegate int JNI_GetDefaultJavaVMInitArgsDelegate(IntPtr args);

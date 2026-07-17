@@ -150,6 +150,24 @@ internal sealed unsafe class Jdk21Invoker : IJvmInvoker, IDisposable
         }
     }
 
+    public JvmClass DefineClass(string name, byte[] bytecode)
+    {
+        if (string.IsNullOrEmpty(name))
+            throw new ArgumentException("Class name must be non-empty.", nameof(name));
+        if (bytecode is null || bytecode.Length == 0)
+            throw new ArgumentException("Bytecode must be non-empty.", nameof(bytecode));
+
+        fixed (byte* pBytes = bytecode)
+        {
+            var localRef = _env.DefineClass(name, IntPtr.Zero, pBytes, bytecode.Length);
+            if (localRef == IntPtr.Zero)
+                throw new InvalidOperationException($"JNIEnv->DefineClass returned null for '{name}'.");
+            var global = _env.NewGlobalRef(localRef);
+            _env.DeleteLocalRef(localRef);
+            return CreateOwnedClass(global, name.Replace('/', '.'));
+        }
+    }
+
     public JvmObject NewObject(JvmClass clazz, string constructorSignature, params JvmValue[] args)
     {
         var ctorId = _env.GetMethodID(clazz.Handle, "<init>", constructorSignature);
@@ -591,6 +609,16 @@ internal sealed unsafe class Jdk21Invoker : IJvmInvoker, IDisposable
 
     public void UnregisterCallbacks(JvmClass clazz)
         => _callbacks.UnregisterAll(clazz.Handle);
+
+    // ---- 全局引用管理 ----
+
+    public IntPtr NewGlobalRef(IntPtr localRef)
+        => _env.NewGlobalRef(localRef);
+
+    public void DeleteGlobalRef(IntPtr globalRef)
+    {
+        if (!_disposed) _env.DeleteGlobalRef(globalRef);
+    }
 
     private void EnsureThrowableCache()
     {
